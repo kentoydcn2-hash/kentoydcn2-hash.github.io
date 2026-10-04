@@ -6,6 +6,9 @@
     <title>福岡グルメナビ</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Leaflet.js (地図表示用ライブラリ) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <style>
         @media print {
             body {
@@ -34,6 +37,12 @@
         .print-only {
             display: none;
         }
+        #mapView {
+            height: 65vh;
+            width: 100%;
+            border-radius: 1rem;
+            z-index: 10;
+        }
     </style>
 </head>
 <body class="bg-gray-50 text-gray-800 font-sans antialiased min-h-screen flex flex-col">
@@ -53,8 +62,6 @@
                 <input type="text" id="searchInput" placeholder="店名、ジャンル、エリア、住所で検索..." oninput="filterRestaurants()" class="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-red-500 bg-gray-50">
             </div>
             <div class="flex items-center gap-2 w-full sm:w-auto justify-end flex-wrap">
-                <!-- 全体マップボタン -->
-                <button onclick="openAllMap()" class="bg-red-600 hover:bg-red-700 text-white text-sm font-medium px-3.5 py-2 rounded-full shadow-sm transition flex items-center gap-1.5 whitespace-nowrap"><i class="fa-solid fa-map-location-dot"></i> 全体マップ</button>
                 <button onclick="openConfigModal()" class="bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium px-3.5 py-2 rounded-full shadow-sm transition flex items-center gap-1.5 whitespace-nowrap"><i class="fa-solid fa-gear"></i> 設定</button>
                 <button onclick="fetchSheetData()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-3.5 py-2 rounded-full shadow-sm transition flex items-center gap-1.5 whitespace-nowrap"><i class="fa-solid fa-rotate"></i> データ更新</button>
                 <button onclick="triggerPrint()" class="bg-gray-800 hover:bg-gray-900 text-white text-sm font-medium px-4 py-2 rounded-full shadow-sm transition flex items-center gap-1.5 whitespace-nowrap"><i class="fa-solid fa-file-pdf"></i> PDF/印刷</button>
@@ -68,6 +75,7 @@
             <div class="flex bg-gray-200 p-1 rounded-xl">
                 <button id="tabAll" onclick="switchTab('all')" class="px-5 py-2 rounded-lg text-sm font-semibold transition bg-white text-gray-900 shadow-sm">すべての店舗 (<span id="countAll">0</span>)</button>
                 <button id="tabVisited" onclick="switchTab('visited')" class="px-5 py-2 rounded-lg text-sm font-semibold transition text-gray-600 hover:text-gray-900">行ったお店 (<span id="countVisited">0</span>)</button>
+                <button id="tabMap" onclick="switchTab('map')" class="px-5 py-2 rounded-lg text-sm font-semibold transition text-gray-600 hover:text-gray-900 flex items-center gap-1.5"><i class="fa-solid fa-map-location-dot"></i> 全体マップ</button>
             </div>
             <div class="flex items-center gap-2 flex-wrap">
                 <div id="genreFilters" class="flex flex-wrap gap-1.5 items-center"></div>
@@ -81,12 +89,20 @@
             <div id="errorDetail" class="mt-4 text-xs text-red-600 max-w-md mx-auto hidden bg-red-50 p-3 rounded-xl border border-red-200"></div>
         </div>
 
-        <div id="restaurantGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+        <!-- リスト表示コンテナ -->
+        <div id="listContainer">
+            <div id="restaurantGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+            <div id="noResults" class="hidden text-center py-16">
+                <div class="text-gray-400 text-5xl mb-3"><i class="fa-solid fa-utensils"></i></div>
+                <p class="text-gray-600 font-medium">条件に一致するお店が見つかりませんでした。</p>
+                <button onclick="resetFilters()" class="mt-4 text-red-500 text-sm font-semibold hover:underline">検索条件をリセットする</button>
+            </div>
+        </div>
 
-        <div id="noResults" class="hidden text-center py-16">
-            <div class="text-gray-400 text-5xl mb-3"><i class="fa-solid fa-utensils"></i></div>
-            <p class="text-gray-600 font-medium">条件に一致するお店が見つかりませんでした。</p>
-            <button onclick="resetFilters()" class="mt-4 text-red-500 text-sm font-semibold hover:underline">検索条件をリセットする</button>
+        <!-- マップ表示コンテナ -->
+        <div id="mapContainer" class="hidden">
+            <div id="mapView" class="shadow-md border border-gray-200"></div>
+            <p class="text-xs text-gray-500 text-center mt-3"><i class="fa-solid fa-circle-info mr-1"></i>ピンをクリックするとお店の詳細情報やGoogleマップへのリンクが表示されます。</p>
         </div>
     </main>
 
@@ -153,7 +169,7 @@
                             <span id="modalAddress" class="truncate"></span>
                         </div>
                         <a id="modalMapBtn" href="#" target="_blank" class="bg-red-500 hover:bg-red-600 text-white text-xs font-semibold px-3 py-1.5 rounded-lg shadow-sm transition flex items-center gap-1 whitespace-nowrap flex-shrink-0">
-                            <i class="fa-solid fa-map-location-dot"></i> マップ
+                            <i class="fa-solid fa-map-location-dot"></i> Googleマップ
                         </a>
                     </div>
                     <div id="modalUrlContainer" class="text-xs text-blue-600 truncate pt-1"><i class="fa-solid fa-link mr-1"></i> <a id="modalUrl" href="#" target="_blank" class="hover:underline">公式サイトを見る</a></div>
@@ -201,10 +217,25 @@
 
         let restaurants = [];
         let visitedData = {};
-        let currentTab = 'all';
+        let currentTab = 'all'; // 'all', 'visited', 'map'
         let selectedGenre = 'すべて';
         let currentModalId = null;
         let sheetUrl = '';
+        let mapInstance = null;
+        let markersLayer = null;
+
+        // 福岡市中心部の概算座標（住所からピンが打てない場合のフォールバック用。主要エリアごとの簡易座標辞書）
+        const areaCoordinates = {
+            '中洲': { lat: 33.5933, lng: 130.4077 },
+            '天神': { lat: 33.5917, lng: 130.3989 },
+            '大名': { lat: 33.5879, lng: 130.3945 },
+            '今泉': { lat: 33.5855, lng: 130.3995 },
+            '薬院': { lat: 33.5821, lng: 130.3995 },
+            '博多': { lat: 33.5902, lng: 130.4206 },
+            '春吉': { lat: 33.5878, lng: 130.4055 },
+            '赤坂': { lat: 33.5888, lng: 130.3872 },
+            '西中洲': { lat: 33.5930, lng: 130.4048 }
+        };
 
         function initApp() {
             sheetUrl = localStorage.getItem('fukuoka_sheet_url') || DEFAULT_SHEET_URL;
@@ -276,32 +307,35 @@
                 const cols = rows[i];
                 if (!cols || !cols[0]) continue;
 
+                // エリアや住所から大まかな緯度経度を推測（福岡市中心部を基準にばらけさせる）
+                let lat = 33.5902 + (Math.random() - 0.5) * 0.03;
+                let lng = 130.4017 + (Math.random() - 0.5) * 0.03;
+                
+                const area = String(cols[2] || '');
+                for (const key in areaCoordinates) {
+                    if (area.includes(key) || String(cols[8] || '').includes(key)) {
+                        lat = areaCoordinates[key].lat + (Math.random() - 0.5) * 0.008;
+                        lng = areaCoordinates[key].lng + (Math.random() - 0.5) * 0.008;
+                        break;
+                    }
+                }
+
                 result.push({
                     id: i,
                     name: String(cols[0] || ''),
                     genre: String(cols[1] || '未分類'),
-                    area: String(cols[2] || '福岡市内'),
+                    area: area || '福岡市内',
                     budget: String(cols[3] || ''),
                     rating: parseFloat(cols[4]) || 4.0,
                     url: String(cols[5] || ''),
                     desc: String(cols[6] || ''),
                     image: String(cols[7] || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=600&q=80'),
-                    address: String(cols[8] || '福岡市内')
+                    address: String(cols[8] || '福岡市内'),
+                    lat: lat,
+                    lng: lng
                 });
             }
             return result;
-        }
-
-        // 全体マップを開く関数（現在表示されている店舗、またはすべてのお店の位置関係をGoogleマップでまとめて表示）
-        function openAllMap() {
-            if (restaurants.length === 0) {
-                alert('店舗データがありません。');
-                return;
-            }
-            // 福岡市中心部を基点にしつつ、エリアや代表的なキーワード、あるいは最初のお店などを中心にマップを開く
-            // Googleマップの複数検索クエリは「福岡 グルメ」または代表的なエリア名を渡すと便利です
-            const mapUrl = `https://www.google.com/maps/search/福岡市+グルメ`;
-            window.open(mapUrl, '_blank');
         }
 
         function saveVisitDataLocally() {
@@ -322,7 +356,62 @@
             currentTab = tab;
             document.getElementById('tabAll').className = tab === 'all' ? "px-5 py-2 rounded-lg text-sm font-semibold transition bg-white text-gray-900 shadow-sm" : "px-5 py-2 rounded-lg text-sm font-semibold transition text-gray-600 hover:text-gray-900";
             document.getElementById('tabVisited').className = tab === 'visited' ? "px-5 py-2 rounded-lg text-sm font-semibold transition bg-white text-gray-900 shadow-sm" : "px-5 py-2 rounded-lg text-sm font-semibold transition text-gray-600 hover:text-gray-900";
-            renderRestaurants();
+            document.getElementById('tabMap').className = tab === 'map' ? "px-5 py-2 rounded-lg text-sm font-semibold transition bg-white text-gray-900 shadow-sm flex items-center gap-1.5" : "px-5 py-2 rounded-lg text-sm font-semibold transition text-gray-600 hover:text-gray-900 flex items-center gap-1.5";
+
+            const listContainer = document.getElementById('listContainer');
+            const mapContainer = document.getElementById('mapContainer');
+
+            if (tab === 'map') {
+                listContainer.classList.add('hidden');
+                mapContainer.classList.remove('hidden');
+                renderMap();
+            } else {
+                listContainer.classList.remove('hidden');
+                mapContainer.classList.add('hidden');
+                renderRestaurants();
+            }
+        }
+
+        function renderMap() {
+            setTimeout(() => {
+                if (!mapInstance) {
+                    mapInstance = L.map('mapView').setView([33.5902, 130.4017], 14);
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        maxZoom: 19,
+                        attribution: '&copy; OpenStreetMap contributors'
+                    }).addTo(mapInstance);
+                    markersLayer = L.layerGroup().addTo(mapInstance);
+                } else {
+                    mapInstance.invalidateSize();
+                }
+
+                markersLayer.clearLayers();
+
+                const keyword = document.getElementById('searchInput').value.toLowerCase();
+                const filtered = restaurants.filter(r => {
+                    const isVisited = visitedData[r.id]?.visited;
+                    if (currentTab === 'visited' && !isVisited) return false;
+                    if (selectedGenre !== 'すべて' && r.genre !== selectedGenre) return false;
+                    if (keyword && !r.name.toLowerCase().includes(keyword) && !r.genre.toLowerCase().includes(keyword) && !r.area.toLowerCase().includes(keyword) && !(r.address && r.address.toLowerCase().includes(keyword))) return false;
+                    return true;
+                });
+
+                filtered.forEach(r => {
+                    const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(r.name + ' ' + r.address)}`;
+                    const popupContent = `
+                        <div style="font-family:sans-serif; min-width: 180px;">
+                            <b style="font-size: 14px; color: #111827;">${r.name}</b><br>
+                            <span style="font-size: 11px; color: #dc2626; font-weight: bold;">${r.genre} / ${r.area}</span><br>
+                            <p style="font-size: 11px; color: #4b5563; margin: 4px 0;">⭐ ${r.rating} - ${r.budget || ''}</p>
+                            <div style="display: flex; gap: 6px; margin-top: 6px;">
+                                <button onclick="openDetailModal(${r.id})" style="background: #ef4444; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 10px; cursor: pointer;">詳細</button>
+                                <a href="${mapUrl}" target="_blank" style="background: #3b82f6; color: white; text-decoration: none; padding: 4px 8px; border-radius: 4px; font-size: 10px; display:inline-block;">Googleマップ</a>
+                            </div>
+                        </div>
+                    `;
+                    L.marker([r.lat, r.lng]).addTo(markersLayer).bindPopup(popupContent);
+                });
+            }, 100);
         }
 
         function renderGenreFilters() {
@@ -332,8 +421,8 @@
             `).join('');
         }
 
-        function setGenre(g) { selectedGenre = g; renderGenreFilters(); renderRestaurants(); }
-        function resetFilters() { document.getElementById('searchInput').value = ''; selectedGenre = 'すべて'; renderGenreFilters(); renderRestaurants(); }
+        function setGenre(g) { selectedGenre = g; renderGenreFilters(); if(currentTab === 'map') { renderMap(); } else { renderRestaurants(); } }
+        function resetFilters() { document.getElementById('searchInput').value = ''; selectedGenre = 'すべて'; renderGenreFilters(); if(currentTab === 'map') { renderMap(); } else { renderRestaurants(); } }
 
         function renderRestaurants() {
             const keyword = document.getElementById('searchInput').value.toLowerCase();
@@ -414,7 +503,9 @@
             }).join('');
         }
 
-        function filterRestaurants() { renderRestaurants(); }
+        function filterRestaurants() { 
+            if(currentTab === 'map') { renderMap(); } else { renderRestaurants(); }
+        }
         function triggerPrint() { document.getElementById('printDate').innerText = new Date().toLocaleDateString('ja-JP'); window.print(); }
 
         function openConfigModal() {
@@ -463,7 +554,7 @@
             document.getElementById('detailModal').classList.remove('hidden');
         }
 
-        function closeDetailModal() { document.getElementById('detailModal').classList.add('hidden'); currentModalId = null; renderRestaurants(); }
+        function closeDetailModal() { document.getElementById('detailModal').classList.add('hidden'); currentModalId = null; if(currentTab==='map'){renderMap();}else{renderRestaurants();} }
 
         function toggleVisitedStatus() {
             const isChecked = document.getElementById('modalVisitedToggle').checked;
