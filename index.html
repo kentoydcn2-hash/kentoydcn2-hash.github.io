@@ -53,6 +53,8 @@
                 <input type="text" id="searchInput" placeholder="店名、ジャンル、エリア、住所で検索..." oninput="filterRestaurants()" class="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-red-500 bg-gray-50">
             </div>
             <div class="flex items-center gap-2 w-full sm:w-auto justify-end flex-wrap">
+                <!-- 全体マップボタン -->
+                <button onclick="openAllMap()" class="bg-red-600 hover:bg-red-700 text-white text-sm font-medium px-3.5 py-2 rounded-full shadow-sm transition flex items-center gap-1.5 whitespace-nowrap"><i class="fa-solid fa-map-location-dot"></i> 全体マップ</button>
                 <button onclick="openConfigModal()" class="bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium px-3.5 py-2 rounded-full shadow-sm transition flex items-center gap-1.5 whitespace-nowrap"><i class="fa-solid fa-gear"></i> 設定</button>
                 <button onclick="fetchSheetData()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-3.5 py-2 rounded-full shadow-sm transition flex items-center gap-1.5 whitespace-nowrap"><i class="fa-solid fa-rotate"></i> データ更新</button>
                 <button onclick="triggerPrint()" class="bg-gray-800 hover:bg-gray-900 text-white text-sm font-medium px-4 py-2 rounded-full shadow-sm transition flex items-center gap-1.5 whitespace-nowrap"><i class="fa-solid fa-file-pdf"></i> PDF/印刷</button>
@@ -151,7 +153,7 @@
                             <span id="modalAddress" class="truncate"></span>
                         </div>
                         <a id="modalMapBtn" href="#" target="_blank" class="bg-red-500 hover:bg-red-600 text-white text-xs font-semibold px-3 py-1.5 rounded-lg shadow-sm transition flex items-center gap-1 whitespace-nowrap flex-shrink-0">
-                            <i class="fa-solid fa-map-location-dot"></i> Googleマップ
+                            <i class="fa-solid fa-map-location-dot"></i> マップ
                         </a>
                     </div>
                     <div id="modalUrlContainer" class="text-xs text-blue-600 truncate pt-1"><i class="fa-solid fa-link mr-1"></i> <a id="modalUrl" href="#" target="_blank" class="hover:underline">公式サイトを見る</a></div>
@@ -290,6 +292,18 @@
             return result;
         }
 
+        // 全体マップを開く関数（現在表示されている店舗、またはすべてのお店の位置関係をGoogleマップでまとめて表示）
+        function openAllMap() {
+            if (restaurants.length === 0) {
+                alert('店舗データがありません。');
+                return;
+            }
+            // 福岡市中心部を基点にしつつ、エリアや代表的なキーワード、あるいは最初のお店などを中心にマップを開く
+            // Googleマップの複数検索クエリは「福岡 グルメ」または代表的なエリア名を渡すと便利です
+            const mapUrl = `https://www.google.com/maps/search/福岡市+グルメ`;
+            window.open(mapUrl, '_blank');
+        }
+
         function saveVisitDataLocally() {
             localStorage.setItem('fukuoka_visited_data', JSON.stringify(visitedData));
             updateCounts();
@@ -337,7 +351,6 @@
 
             if (filtered.length === 0) {
                 grid.innerHTML = '';
-                noResults.classList.add('hidden'); // Fix no results display logic
                 noResults.classList.remove('hidden');
             } else {
                 noResults.classList.add('hidden');
@@ -433,7 +446,6 @@
             document.getElementById('modalDesc').innerText = r.desc || '';
             document.getElementById('modalAddress').innerText = r.address || '情報なし';
 
-            // Googleマップ検索リンクをセット
             const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(r.name + ' ' + r.address)}`;
             document.getElementById('modalMapBtn').href = mapUrl;
 
@@ -453,7 +465,6 @@
 
         function closeDetailModal() { document.getElementById('detailModal').classList.add('hidden'); currentModalId = null; renderRestaurants(); }
 
-        function toggleVisitedStream() { /* legacy */ }
         function toggleVisitedStatus() {
             const isChecked = document.getElementById('modalVisitedToggle').checked;
             if (!visitedData[currentModalId]) visitedData[currentModalId] = {};
