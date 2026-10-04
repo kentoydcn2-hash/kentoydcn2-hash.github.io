@@ -67,7 +67,9 @@
                 <button id="tabAll" onclick="switchTab('all')" class="px-5 py-2 rounded-lg text-sm font-semibold transition bg-white text-gray-900 shadow-sm">すべての店舗 (<span id="countAll">0</span>)</button>
                 <button id="tabVisited" onclick="switchTab('visited')" class="px-5 py-2 rounded-lg text-sm font-semibold transition text-gray-600 hover:text-gray-900">行ったお店 (<span id="countVisited">0</span>)</button>
             </div>
-            <div id="genreFilters" class="flex flex-wrap gap-1.5 items-center"></div>
+            <div class="flex items-center gap-2 flex-wrap">
+                <div id="genreFilters" class="flex flex-wrap gap-1.5 items-center"></div>
+            </div>
         </div>
 
         <!-- ローディング表示 -->
@@ -143,8 +145,16 @@
 
                 <div class="border-t border-gray-100 pt-3 space-y-2">
                     <p class="text-sm text-gray-700 leading-relaxed" id="modalDesc"></p>
-                    <div id="modalAddressContainer" class="text-xs text-gray-600 flex items-center gap-2"><i class="fa-solid fa-map-pin text-red-500"></i> <span id="modalAddress"></span></div>
-                    <div id="modalUrlContainer" class="text-xs text-blue-600 truncate"><i class="fa-solid fa-link mr-1"></i> <a id="modalUrl" href="#" target="_blank" class="hover:underline">公式サイトを見る</a></div>
+                    <div class="flex items-center justify-between bg-gray-50 p-3 rounded-xl border border-gray-200">
+                        <div class="text-xs text-gray-700 flex items-center gap-2 truncate pr-2">
+                            <i class="fa-solid fa-map-pin text-red-500 flex-shrink-0"></i> 
+                            <span id="modalAddress" class="truncate"></span>
+                        </div>
+                        <a id="modalMapBtn" href="#" target="_blank" class="bg-red-500 hover:bg-red-600 text-white text-xs font-semibold px-3 py-1.5 rounded-lg shadow-sm transition flex items-center gap-1 whitespace-nowrap flex-shrink-0">
+                            <i class="fa-solid fa-map-location-dot"></i> Googleマップ
+                        </a>
+                    </div>
+                    <div id="modalUrlContainer" class="text-xs text-blue-600 truncate pt-1"><i class="fa-solid fa-link mr-1"></i> <a id="modalUrl" href="#" target="_blank" class="hover:underline">公式サイトを見る</a></div>
                 </div>
 
                 <!-- 訪問ログ -->
@@ -265,7 +275,7 @@
                 if (!cols || !cols[0]) continue;
 
                 result.push({
-                    id: i, // 1行目がヘッダー、2行目以降が店舗データ
+                    id: i,
                     name: String(cols[0] || ''),
                     genre: String(cols[1] || '未分類'),
                     area: String(cols[2] || '福岡市内'),
@@ -287,15 +297,10 @@
 
         function updateCounts() {
             document.getElementById('countAll').innerText = restaurants.length;
-            
-            // 実際に読み込まれている店舗のID（id）リストを作成
             const validIds = new Set(restaurants.map(r => r.id));
-            
-            // 読み込まれている店舗の中で、かつ「visited: true」のものだけを正確にカウント
             const visitedCount = Object.keys(visitedData).filter(id => {
                 return validIds.has(Number(id)) && visitedData[id] && visitedData[id].visited;
             }).length;
-
             document.getElementById('countVisited').innerText = visitedCount;
         }
 
@@ -332,31 +337,37 @@
 
             if (filtered.length === 0) {
                 grid.innerHTML = '';
+                noResults.classList.add('hidden'); // Fix no results display logic
                 noResults.classList.remove('hidden');
             } else {
                 noResults.classList.add('hidden');
                 grid.innerHTML = filtered.map(r => {
                     const isVisited = visitedData[r.id]?.visited;
                     const vInfo = visitedData[r.id] || {};
+                    const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(r.name + ' ' + r.address)}`;
+                    
                     return `
-                        <div onclick="openDetailModal(${r.id})" class="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition border border-gray-100 cursor-pointer flex flex-col group">
-                            <div class="relative h-48 bg-gray-100 overflow-hidden">
+                        <div class="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition border border-gray-100 flex flex-col group">
+                            <div class="relative h-48 bg-gray-100 overflow-hidden cursor-pointer" onclick="openDetailModal(${r.id})">
                                 <img src="${r.image}" class="w-full h-full object-cover group-hover:scale-105 transition duration-300">
                                 ${isVisited ? '<span class="absolute top-3 left-3 bg-emerald-600 text-white text-xs px-2.5 py-1 rounded-full font-bold shadow-md"><i class="fa-solid fa-check"></i> 行った店</span>' : ''}
                                 <span class="absolute bottom-3 left-3 bg-black/60 text-white text-xs px-2.5 py-1 rounded-full">${r.genre}</span>
                             </div>
                             <div class="p-5 flex flex-col flex-grow">
-                                <div class="flex justify-between items-start mb-1">
+                                <div class="flex justify-between items-start mb-1 cursor-pointer" onclick="openDetailModal(${r.id})">
                                     <h3 class="font-bold text-lg text-gray-900 group-hover:text-red-500">${r.name}</h3>
                                     <span class="text-amber-500 font-bold text-sm"><i class="fa-solid fa-star"></i>${r.rating}</span>
                                 </div>
                                 <p class="text-xs text-gray-500 mb-1"><i class="fa-solid fa-location-dot text-red-500 mr-1"></i>${r.area}</p>
-                                ${r.address ? `<p class="text-[11px] text-gray-400 mb-2 truncate"><i class="fa-solid fa-map-pin mr-1"></i>${r.address}</p>` : ''}
-                                <p class="text-xs text-gray-600 line-clamp-2 mb-4 flex-grow">${r.desc || ''}</p>
-                                ${isVisited && vInfo.myMemo ? `<div class="bg-emerald-50 p-2 rounded-xl text-xs text-emerald-800 mb-3"><i class="fa-solid fa-comment mr-1"></i>${vInfo.myMemo}</div>` : ''}
+                                <div class="flex items-center justify-between mb-2">
+                                    <p class="text-[11px] text-gray-400 truncate pr-2"><i class="fa-solid fa-map-pin mr-1"></i>${r.address}</p>
+                                    <a href="${mapUrl}" target="_blank" class="text-[11px] text-red-600 hover:text-red-700 font-semibold flex items-center gap-1 whitespace-nowrap bg-red-50 px-2 py-1 rounded-md transition"><i class="fa-solid fa-map"></i> マップ</a>
+                                </div>
+                                <p class="text-xs text-gray-600 line-clamp-2 mb-4 flex-grow cursor-pointer" onclick="openDetailModal(${r.id})">${r.desc || ''}</p>
+                                ${isVisited && vInfo.myMemo ? `<div class="bg-emerald-50 p-2 rounded-xl text-xs text-emerald-800 mb-3 cursor-pointer" onclick="openDetailModal(${r.id})"><i class="fa-solid fa-comment mr-1"></i>${vInfo.myMemo}</div>` : ''}
                                 <div class="flex justify-between items-center pt-3 border-t border-gray-100 text-xs text-gray-500 mt-auto">
                                     <span>${r.budget || ''}</span>
-                                    <span class="text-red-500 font-semibold">詳細を見る &rarr;</span>
+                                    <span class="text-red-500 font-semibold cursor-pointer" onclick="openDetailModal(${r.id})">詳細を見る &rarr;</span>
                                 </div>
                             </div>
                         </div>
@@ -422,6 +433,10 @@
             document.getElementById('modalDesc').innerText = r.desc || '';
             document.getElementById('modalAddress').innerText = r.address || '情報なし';
 
+            // Googleマップ検索リンクをセット
+            const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(r.name + ' ' + r.address)}`;
+            document.getElementById('modalMapBtn').href = mapUrl;
+
             const urlContainer = document.getElementById('modalUrlContainer');
             const urlElem = document.getElementById('modalUrl');
             if (r.url) { urlElem.href = r.url; urlElem.innerText = r.url; urlContainer.classList.remove('hidden'); } else { urlContainer.classList.add('hidden'); }
@@ -438,6 +453,7 @@
 
         function closeDetailModal() { document.getElementById('detailModal').classList.add('hidden'); currentModalId = null; renderRestaurants(); }
 
+        function toggleVisitedStream() { /* legacy */ }
         function toggleVisitedStatus() {
             const isChecked = document.getElementById('modalVisitedToggle').checked;
             if (!visitedData[currentModalId]) visitedData[currentModalId] = {};
